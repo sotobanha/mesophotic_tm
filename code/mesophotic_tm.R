@@ -14,7 +14,7 @@ library(topicmodels)
 library(readxl)
 
 # loading data
-dat <- read.csv('raw_data/topmod_mesophotic.csv', stringsAsFactors=F) 
+dat <- read.csv('data/topmod_mesophotic.csv', stringsAsFactors=F) 
 dat$text <- paste(dat$Article.Title, dat$Author.Keywords, dat$Abstract, sep=" ")
 DF <- as.data.frame(cbind(dat$Paper.ID, dat$text))
 names(DF) <- c("doc_id", "text")
@@ -47,7 +47,8 @@ CPmatrix <- tm_map(CPmatrix, removeNumbers)
 CPmatrix <- tm_map(CPmatrix, removeWords, stopwords("english"))
 #remove whitespace
 CPmatrix <- tm_map(CPmatrix, stripWhitespace)
-#
+
+# check the data
 writeLines(as.character(CPmatrix[[2]]))
 
 remove_whole_words <- content_transformer(function(text, words) {
@@ -57,10 +58,10 @@ remove_whole_words <- content_transformer(function(text, words) {
 
 text.processed <- data.frame(text=sapply(CPmatrix, identity),stringsAsFactors=F)
 text.processed <- t(text.processed)
-write.csv(text.processed, 'text.processed.csv')
+write.csv(text.processed, 'data/text.processed.csv')
 
 # create column names in excel
-text.processed <- read.csv('text.processed.csv')
+text.processed <- read.csv('data/text.processed.csv')
 
 content <- dat$text
 
@@ -225,9 +226,6 @@ write.csv(M19, "Articles_m19.csv")
 
 #### Run the model ####
 
-#windows
-setwd("G:/Meu Drive/#Doutorado/##Data/Topic Modeling")
-
 #mac
 setwd("/Users/thomas/Library/CloudStorage/GoogleDrive-sotobanha@gmail.com/My Drive/#Doutorado/##Data/Topic Modeling")
 
@@ -243,8 +241,8 @@ library(readxl)
 
 # Open the data
 
-ldaOut19 <- readRDS('ldaOut19.rds')
-dat <- read_excel('topmod_mesophotic.xlsx')
+ldaOut19 <- readRDS('data/ldaOut19.rds')
+dat <- read_excel('data/topmod_mesophotic.xlsx')
 
 
 # labels
