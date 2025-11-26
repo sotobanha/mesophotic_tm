@@ -1,11 +1,12 @@
 ####
 
 ## R Code used in the manuscript by Banha et al. (submitted to Coral Reefs)
+## Mesophotic ecosystems: a topic modeling analysis of research trends and gaps
 
 ####
 
 
-#### creating the model ####
+#### Creating the Topic Model ####
 
 library(bibliometrix)
 library(tm)
@@ -13,15 +14,16 @@ library(slam)
 library(topicmodels)
 library(readxl)
 
-# loading data
+# Load data
 dat <- read.csv("data/topmod_mesophotic.csv", stringsAsFactors = F)
+names(dat)
 dat$text <- paste(dat$Article.Title, dat$Author.Keywords, dat$Abstract, sep = " ")
 DF <- as.data.frame(cbind(dat$Paper.ID, dat$text))
 names(DF) <- c("doc_id", "text")
 CPmatrix <- VCorpus(DataframeSource(DF))
 CPmatrix <- tm_map(CPmatrix, content_transformer(tolower))
 
-# remove potentially problematic symbols
+# Remove potentially problematic symbols
 toSpace <- content_transformer(function(x, pattern) {
   return(gsub(pattern, " ", x))
 })
@@ -41,16 +43,15 @@ changeWords <- content_transformer(function(x, pattern, sub) {
   return(gsub(pattern, sub, x))
 })
 
-# remove punctuation
+# Remove punctuation
 CPmatrix <- tm_map(CPmatrix, removePunctuation)
-# Strip digits
+# Remove numbers
 CPmatrix <- tm_map(CPmatrix, removeNumbers)
-# remove stopwords
+# Remove stopwords
 CPmatrix <- tm_map(CPmatrix, removeWords, stopwords("english"))
-# remove whitespace
+# Remove whitespace
 CPmatrix <- tm_map(CPmatrix, stripWhitespace)
-
-# check the data
+# Check the data
 writeLines(as.character(CPmatrix[[2]]))
 
 remove_whole_words <- content_transformer(function(text, words) {
@@ -58,19 +59,29 @@ remove_whole_words <- content_transformer(function(text, words) {
   gsub(pattern, "", text)
 })
 
-text.processed <- data.frame(text = sapply(CPmatrix, identity), stringsAsFactors = F)
-text.processed <- t(text.processed)
-write.csv(text.processed, "data/text.processed.csv")
+# Extract only the text content from CPmatrix (without metadata structure issues)
+text.processed <- sapply(CPmatrix, as.character)
 
-# create column names in excel
-text.processed <- read.csv("data/text.processed.csv", row.names = 1)
+# Save for reference in a clean format (optional)
+write.csv(data.frame(document_id = names(text.processed), content = text.processed),
+  "data/text.processed.csv",
+  row.names = FALSE
+)
 
-content <- dat$text
 
-
+# N-gram analysis on the processed text
 library(ngram)
-ng <- ngram(text.processed$content, n = 2)
+
+# Combine all processed documents into one string for n-gram analysis
+combined_text <- paste(text.processed, collapse = " ")
+
+# Bigram analysis
+ng <- ngram(combined_text, n = 2)
 get.phrasetable(ng)[1:150, ]
+
+# Trigram analysis
+ng3 <- ngram(combined_text, n = 3)
+get.phrasetable(ng3)[1:150, ]
 
 CPmatrix <- tm_map(CPmatrix, changeWords, "mesophotic coral ecosystems", "mesophotic_coral_ecosystem")
 CPmatrix <- tm_map(CPmatrix, changeWords, "mesophotic coral ecosystem", "mesophotic_coral_ecosystem")
@@ -167,17 +178,17 @@ CPmatrix <- tm_map(CPmatrix, changeWords, "terraces", "terrace")
 CPmatrix <- tm_map(CPmatrix, changeWords, "twilight zone", "twilight_zone")
 CPmatrix <- tm_map(CPmatrix, changeWords, "usvi", "us_virgin_islands")
 
+# Save the data
+saveRDS(CPmatrix, "data/CPmatrix.rds")
 
-# saveRDS(CPmatrix, 'CPmatrix.rds')
-CPmatrix <- readRDS("CPmatrix.rds")
+# Load the data
+CPmatrix <- readRDS("data/CPmatrix.rds")
 
 DTMmatrix <- DocumentTermMatrix(CPmatrix)
 dim(DTMmatrix)
-
-
 which(col_sums(DTMmatrix) == 555)
 
-# Cutoff terms
+# Filter terms by frequency (remove overly common or rare terms)
 summary(col_sums(DTMmatrix))
 table(col_sums(DTMmatrix))
 DTMmatrix <- DTMmatrix[, col_sums(DTMmatrix) > 20]
@@ -185,10 +196,9 @@ DTMmatrix <- DTMmatrix[, col_sums(DTMmatrix) < 650]
 
 col_sums(DTMmatrix)[order(names((col_sums(DTMmatrix))))]
 
-saveRDS(DTMmatrix, "DTMmatrix.rds")
-DTMmatrix <- readRDS("DTMmatrix.rds")
+saveRDS(DTMmatrix, "data/DTMmatrix.rds")
+DTMmatrix <- readRDS("data/DTMmatrix.rds")
 
-# eigth to late script
 # Set parameters for Gibbs sampling
 burnin <- 4000
 iter <- 2000
@@ -198,7 +208,9 @@ best <- TRUE
 keep <- 100
 
 ################ Find optimal number of topics
+
 library("ldatuning")
+
 dtm <- DTMmatrix
 result <- FindTopicsNumber(
   dtm,
@@ -217,19 +229,15 @@ FindTopicsNumber_plot(result)
 
 ldaOut19 <- LDA(DTMmatrix, 19, method = "Gibbs", control = list(seed = seed, nstart = nstart, best = best, burnin = burnin, iter = iter, keep = keep))
 ldaOut.terms <- as.matrix(terms(ldaOut19, 190))
-write.csv(ldaOut.terms, "model19.csv")
-saveRDS(ldaOut19, "ldaOut19.rds")
+write.csv(ldaOut.terms, "data/model19.csv")
+saveRDS(ldaOut19, "data/ldaOut19.rds")
 M19 <- modeltools::posterior(ldaOut19)$topics # article x topic
-write.csv(M19, "Articles_m19.csv")
+write.csv(M19, "data/Articles_m19.csv")
 
 
-# BANHA ####
 
 
-#### Run the model ####
-
-# mac
-setwd("/Users/thomas/Library/CloudStorage/GoogleDrive-sotobanha@gmail.com/My Drive/#Doutorado/##Data/Topic Modeling")
+#### Data Analysis ####
 
 
 library(bibliometrix)
@@ -238,16 +246,12 @@ library(slam)
 library(topicmodels)
 library(readxl)
 
-# install.packages("readxl")
-
-
 # Open the data
 
 ldaOut19 <- readRDS("data/ldaOut19.rds")
-dat <- read_excel("data/topmod_mesophotic.xlsx")
+dat <- read_excel("data/topmod_mesophotic.xlsx") # the .csv is also available
 
-
-# labels
+# Topic labels
 topic_names <- c(
   "Trophic ecology",
   "Reef development and framework",
@@ -300,302 +304,248 @@ topic_num <- c(
 
 M1 <- t(modeltools::posterior(ldaOut19)$terms) # word x topic
 M2 <- modeltools::posterior(ldaOut19)$topics # article x topic
-M3 <- as.data.frame(cbind(M2, dat$Publication.Year))
+M3 <- as.data.frame(cbind(M2, dat$Publication.Year)) # article x topic with year
 
 ####
 #### ARTICLES PER YEAR WITH ACCUMULATION ####
 ####
 
-# Artigos por ano com acumulação
-dat <- read_excel("topmod_mesophotic.xlsx")
-
+# Articles per year with accumulation curve
+dat <- read_excel("data/topmod_mesophotic.xlsx")
 
 library(ggplot2)
 library(dplyr)
 
-# N de artigos
+# Number of articles
 
-# Supondo que 'dat' é seu DataFrame que contém a coluna "Publication.Year"
-# Calcular o número total de artigos por ano
+# Calculate total articles per year
 total_articles_per_year <- dat %>%
   group_by(Publication.Year) %>%
-  summarise(total_articles = n(), .groups = "drop") # Resumir o total de artigos por ano
+  summarise(total_articles = n(), .groups = "drop") # Summarize total articles per year
 
 
-## JUNTANDO OS DOIS
+## Merging both
 
-# Calcular o número de artigos por ano e a acumulação
+# Calculate number of articles per year and accumulation curve
 artigos_por_ano <- dat %>%
   group_by(Publication.Year) %>%
   summarise(n_artigos = n(), .groups = "drop") %>%
-  mutate(acumulado = cumsum(n_artigos)) # Calcular a acumulação
+  mutate(acumulado = cumsum(n_artigos)) # Calculate accumulation curce
 
-# Definir intervalo de anos
+# Define year intervals
 anos_intervalo <- c(1958, seq(1990, 2020, by = 10), 2024)
 
-par(lwd)
-# Criar gráfico com dois eixos y
-par(mar = c(5, 5, 2, 5)) # Ajustar margens do gráfico
 
-# Gráfico de barras
+# Create plot with two y-axes
+par(mar = c(5, 5, 2, 5)) # Adjust plot margins
+
+# Bar plot
 barplot_heights <- barplot(artigos_por_ano$n_artigos,
-  names.arg = artigos_por_ano$Publication.Year, # Exibir todos os anos
+  names.arg = artigos_por_ano$Publication.Year, # Display all years
   col = "white", border = "black",
-  ylim = c(0, max(artigos_por_ano$n_artigos) + 5), # Ajustar limite do eixo y
+  ylim = c(0, max(artigos_por_ano$n_artigos) + 5), # Adjust y-axis limit
   xlab = NULL, ylab = "# Articles published per year",
-  xaxt = "n", # Não desenhar o eixo x automaticamente
+  xaxt = "n", # Do not draw x-axis automatically
   # cex.names = 1,  # Aumenta o tamanho dos rótulos no eixo x
   cex.lab = 1.3, # Aumenta o tamanho do título do eixo y
   cex.axis = 1.3
 ) # Aumenta o tamanho dos rótulos no eixo y
-# Adicionar rótulos apenas para os intervalos desejados
+# Add labels only for desired intervals
 posicoes_intervalo <- match(anos_intervalo, artigos_por_ano$Publication.Year)
 
-# Adicionar rótulos de intervalo alinhados com as barras e passando pelo zero
+# Add interval labels aligned with bars
 axis(1,
   at = barplot_heights[posicoes_intervalo],
   labels = anos_intervalo, tick = TRUE, line = 0, cex.axis = 1.3
-) # Adicionar rótulos de intervalo
+) # Add interval labels
 
-# Adicionar asterisco acima da barra de 2024
+# Add asterisk above 2024 bar
 text(
   x = barplot_heights[which(artigos_por_ano$Publication.Year == 2024)],
   y = artigos_por_ano$n_artigos[which(artigos_por_ano$Publication.Year == 2024)] + 5,
   labels = "*", cex = 3, col = "black"
 )
 
-# Adicionar uma linha no eixo x no valor zero
-abline(h = 0, col = "black") # Linha no zero para referência
+# Add line at x-axis zero
+abline(h = 0, col = "black") # Reference line at zero
 
-# Gráfico da curva de acumulação
-par(new = TRUE) # Permitir sobreposição do gráfico
+# Accumulation curve plot
+par(new = TRUE) # Allow plot overlay
 plot(artigos_por_ano$Publication.Year,
   artigos_por_ano$acumulado,
   type = "l", col = "red", lwd = 3,
-  ylim = c(0, max(artigos_por_ano$acumulado) + 200), # Ajustar limite do eixo y
+  ylim = c(0, max(artigos_por_ano$acumulado) + 200), # Adjust y-axis limit
   ylab = "", xlab = "", axes = FALSE
-) # Não desenhar os eixos
+) # Do not draw axes
 
-# Adicionar eixo y direito para acumulação
-axis(4, col.axis = "black", cex.axis = 1.3) # Eixo y direito em vermelho
-mtext("# Articles accumulated", side = 4, line = 3, col = "black", cex = 1.3) # Rótulo do eixo y direito
+# Add right y-axis for accumulation
+axis(4, col.axis = "black", cex.axis = 1.3) # Right y-axis
+mtext("# Articles accumulated", side = 4, line = 3, col = "black", cex = 1.3) # Right y-axis label
 
 
-####
 #### ARTICLES PER TOPICS ####
-####
+
 
 M2tops <- M2
 colnames(M2tops) <- topic_names
 
 
-# Identifica o índice do tópico com a maior proporção em cada artigo
+# Identify the index of the topic with the highest proportion in each article
 principal_topic <- apply(M2tops, 1, which.max)
 
-# Conta quantas vezes cada tópico é o principal
+# Count how many times each topic is the main one
 topico_counts <- table(principal_topic)
 
-# Cria uma tabela com o número de vezes que cada tópico foi o principal
+# Create a table with the count of main topics
 topico_counts_df <- data.frame(
   Topico = as.numeric(names(topico_counts)),
   Quantidade_de_artigos = as.vector(topico_counts)
 )
 
-# Exibe o resultado
+# Display the result
 print(topico_counts_df)
 
-# Soma o número total de artigos
+# Sum total number of articles
 total_artigos <- sum(topico_counts)
 
-# Exibe o total de artigos
+# Display total articles
 print(total_artigos)
 
-###
-# ARTICLES PER TOPICS BAR PLOT
-###
 
-# Pacotes necessários
+#### ARTICLES PER TOPICS BAR PLOT ####
+
+# Required packages
 library(ggplot2)
-library(vegan) # Para o vegdist e clustering
+library(vegan) # For vegdist and clustering
 
-# Supondo que o `topico_counts_df` contém:
-# Colunas: 'Topico' (número do tópico) e 'Quantidade_de_artigos'
 
-# Ordenando pela quantidade de artigos de forma decrescente
+# Ordering by article count descending
 topico_counts_df <- topico_counts_df[order(-topico_counts_df$Quantidade_de_artigos), ]
 
-# Atribuindo os clusters aos tópicos
-topico_counts_df$Cluster <- as.factor(sub_grp[topico_counts_df$Topico])
-
-# Converte o número do tópico para o nome do tópico usando o objeto topic_names
+# Convert topic number to topic name using topic_names object
 topico_counts_df$Nome_do_Topico <- topic_names[topico_counts_df$Topico]
 
-###
-# BARRAS Pretas
-###
-
-# Pacotes necessários
-library(ggplot2)
-library(vegan) # Para o vegdist e clustering
-
-# Supondo que o `topico_counts_df` contém:
-# Colunas: 'Topico' (número do tópico) e 'Quantidade_de_artigos'
-
-# Ordenando pela quantidade de artigos de forma decrescente
-topico_counts_df <- topico_counts_df[order(-topico_counts_df$Quantidade_de_artigos), ]
-
-# Converte o número do tópico para o nome do tópico usando o objeto topic_names
-topico_counts_df$Nome_do_Topico <- topic_names[topico_counts_df$Topico]
-
-# Criando o gráfico de barras, removendo as cores dos clusters e colocando bordas pretas
+# Creating bar plot, removing cluster colors and adding black borders
 ggplot(topico_counts_df, aes(y = reorder(Nome_do_Topico, Quantidade_de_artigos), x = Quantidade_de_artigos)) +
-  geom_bar(stat = "identity", fill = NA, color = "black", size = 1, width = 0.85) + # Barras vazadas e bordas pretas
+  geom_bar(stat = "identity", fill = NA, color = "black", linewidth = 1, width = 0.85) + # Hollow bars and black borders
   labs(y = NULL, x = "Main topic (# articles)", title = NULL) +
-  scale_x_continuous(breaks = scales::pretty_breaks()) + # Adicionar tick marks no eixo
+  scale_x_continuous(breaks = scales::pretty_breaks()) + # Add tick marks to axis
   theme_minimal() +
   theme(
     axis.text.y = element_text(size = 16, angle = 0, hjust = 1, colour = "black"),
     axis.text.x = element_text(size = 14, colour = "black"),
-    axis.title.x = element_text(size = 14), # Aumenta o tamanho do título do eixo X
-    axis.ticks.x = element_line(size = 0.5, color = "black") # Adicionar *tick marks* no eixo X
+    axis.title.x = element_text(size = 14), # Increase X-axis title size
+    axis.ticks.x = element_line(size = 0.5, color = "black") # Add tick marks to X-axis
   )
 
 
-# COLORIDO
-# Criando o gráfico de barras, mapeando color para o Cluster e removendo o preenchimento
-# ggplot(topico_counts_df, aes(y = reorder(Nome_do_Topico, Quantidade_de_artigos), x = Quantidade_de_artigos, color = Cluster)) +
-geom_bar(stat = "identity", fill = NA, size = 1) + # Preenchimento vazio e borda mais espessa
-  scale_color_manual(values = cluster_colors) + # Definindo as cores dos clusters para as bordas
-  labs(y = NULL, x = "Main topic (# articles)", title = NULL) +
-  theme_minimal() +
-  theme(axis.text.y = element_text(size = 12, angle = 0, hjust = 1)) # Ajustando o texto do eixo Y
-
-
-####
-#### TOP 50 SIMILARITY - CLUSTER ####
-####
-
+#### TOP 50 words similarity - Cluster ####
 
 # MAKING THE TOP 50 MATRIX
 
-# Supondo que M1 é um data frame onde as linhas são palavras e as colunas são tópicos (probabilidades)
-
-# Inicializar uma lista para armazenar as palavras únicas
+# Initialize list to store unique words
 palavras_selecionadas50 <- c()
 
-# Loop sobre cada tópico (coluna) para identificar as 50 palavras com as maiores probabilidades
+# Loop over each topic (column) to identify top 50 words with highest probabilities
 for (i in 1:19) {
-  # Ordenar as palavras pelo tópico atual (i) em ordem decrescente de probabilidade
+  # Sort words by current topic (i) in descending order of probability
   top50_palavras <- rownames(M1)[order(M1[, i], decreasing = TRUE)]
 
-  # Selecionar as 50 palavras mais importantes
+  # Select top 50 most important words
   top50_unicas <- top50_palavras[1:50]
 
-  # Adicionar as palavras à lista de palavras selecionadas
+  # Add words to selected words list
   palavras_selecionadas50 <- unique(c(palavras_selecionadas50, top50_unicas))
 }
 
-# Criar uma nova matriz vazia M1_top50
+# Create new empty matrix M1_top50
 M1_top50 <- data.frame(matrix(0, nrow = length(palavras_selecionadas50), ncol = 19))
-rownames(M1_top50) <- palavras_selecionadas50 # Definir as palavras como nomes das linhas
+rownames(M1_top50) <- palavras_selecionadas50 # Set words as row names
 
-# Preencher a matriz M1_top50 com as probabilidades
+# Fill M1_top50 matrix with probabilities
 for (palavra in palavras_selecionadas50) {
   for (i in 1:19) {
-    M1_top50[palavra, i] <- M1[palavra, i] # Atribuir a probabilidade correspondente
+    M1_top50[palavra, i] <- M1[palavra, i] # Assign corresponding probability
   }
 }
 
-# Nomear as colunas de 1 a 19
+# Name columns from 1 to 19
 colnames(M1_top50) <- topic_names
 
-# Salvando a planilha com as top 50 palavras
+# Saving spreadsheet with top 50 words
 
-# Inicializar uma lista para armazenar as palavras top 50 para cada tópico
+# Initialize list to store top 50 words for each topic
 top50_matrix <- matrix(NA, nrow = 50, ncol = 19)
 
-# Loop sobre cada tópico (coluna) para identificar as 50 palavras com as maiores probabilidades
+# Loop over each topic (column) to identify top 50 words with highest probabilities
 for (i in 1:19) {
-  # Ordenar as palavras pelo tópico atual (i) em ordem decrescente de probabilidade
+  # Sort words by current topic (i) in descending order of probability
   top50_palavras <- rownames(M1)[order(M1[, i], decreasing = TRUE)]
 
-  # Selecionar as 50 palavras mais importantes
+  # Select top 50 most important words
   top50_matrix[, i] <- top50_palavras[1:50]
 }
 
-# Atribuir nomes às colunas da matriz
+# Assign names to matrix columns
 colnames(top50_matrix) <- topic_names
 
-# Salvar a matriz em uma planilha chamada top50_words_mce.xlsx
-write.csv(top50_matrix, file = "top50_words_mce.csv")
+# Save matrix to file top50_words_mce.csv
+write.csv(top50_matrix, file = "data/top50_words_mce.csv")
 
-# Carregar o pacote openxlsx
 library(openxlsx)
 
-# Ler a planilha existente
-top50_data <- read.csv("top50_words_mce.csv")
+# Read existing spreadsheet
+top50_data <- read.csv("data/top50_words_mce.csv")
 
-# Reorganizar as colunas em ordem alfabética
+# Reorganize columns alphabetically
 top50_data_sorted <- top50_data[, order(colnames(top50_data))]
 
-# Salvar a planilha reorganizada em um novo arquivo ou sobrescrever o existente
-write.xlsx(top50_data_sorted, file = "top50_words_mce_sorted.xlsx")
+# Save reorganized spreadsheet to new file or overwrite existing
+write.xlsx(top50_data_sorted, file = "data/top50_words_mce_sorted.xlsx")
+
+# Saving spreadsheet with probabilities
+write.csv(M1_top50, file = "data/top50_words_probability_mce.csv", row.names = TRUE)
 
 
-
-# Salvando a planilha com as probabilidades
-write.csv(M1_top50, file = "top50_words_probability_mce.csv", row.names = TRUE)
-
+# The new M1_top50 matrix will have all words from the
+# top 50 most important of each topic and their probabilities
 
 
-# A nova matriz M1_top50 terá todas as palavras das 50 palavras mais importantes de cada tópico e suas probabilidades
-
-###
 # DISSIMILARITY
-###
+
 
 library(vegan)
 library(ggplot2)
-# Calcular a matriz de dissimilaridade usando Bray-Curtis
+# Calculate dissimilarity matrix using Bray-Curtis
 dissimilaridade_bray_curtis50 <- vegdist(t(M1_top50), method = "bray")
 
-
-# Visualizar a matriz de dissimilaridade
+# Visualize dissimilarity matrix
 print(dissimilaridade_bray_curtis50)
 
-####
-# CLUSTER
-###
+## CLUSTER
 
-# Supondo que dissimilaridade_bray_curtis já foi calculada
-# Realizar o agrupamento hierárquico
-cluster_hierarquico50 <- hclust(dissimilaridade_bray_curtis50, method = "ward.D2") # Método de agrupamento pode ser alterado
-# cluster_hierarquico_euc <- hclust(dissimilaridade_euclidean, method = "ward.D2")  # Método de agrupamento pode ser alterado
+# Perform hierarchical clustering
+cluster_hierarquico50 <- hclust(dissimilaridade_bray_curtis50, method = "ward.D2") # Clustering method can be changed
 
+# Plot dendrogram
+plot(cluster_hierarquico50, main = "Cluster Bray-Curtis with top 50", xlab = "Topics", ylab = "Dissimilarity")
 
-# Plotar o dendrograma
-plot(cluster_hierarquico50, main = "Cluster BC top 50", xlab = "Tópicos", ylab = "Dissimilaridade")
+# Check dissimilarity and clustering structure
+cat("Number of topics in M1_top50:", ncol(M1_top50), "\n") # should be 19
+cat("Number of groups:", length(grupos), "\n") # should be equal to number of topics
 
-# plot(cluster_hierarquico_euc, main = "Cluster Euclidean", xlab = "Tópicos", ylab = "Dissimilaridade")
-
-
-# Primeiro, verifique a estrutura da dissimilaridade e do agrupamento
-cat("Número de tópicos em M1_top50:", ncol(M1_top50), "\n") # deve ser 19
-cat("Número de grupos:", length(grupos), "\n") # deve ser igual ao número de tópicos
-
-# Se você já calculou os grupos usando cutree
-# num_grupos <- 7 # ou o número que você deseja
+# Calculate groups using cutree
 grupos <- cutree(cluster_hierarquico50, h = 0.94)
 
-# Certifique-se de que grupos corresponda aos tópicos (19)
+# Ensure groups correspond to topics (19)
 if (length(grupos) != ncol(M1_top50)) {
-  stop("O número de grupos não corresponde ao número de tópicos.")
+  stop("Number of groups does not match number of topics.")
 }
 
-# Criar um data frame com tópicos e seus respectivos grupos
+# Create data frame with topics and their respective groups
 tópicos_com_grupos50 <- data.frame(Tópico = colnames(M1_top50), Grupo = grupos)
 
-# Exibir o data frame
+# Display data frame
 print(tópicos_com_grupos50)
 
 cluster_colors <- c(
@@ -612,19 +562,19 @@ cluster_colors <- c(
 par(lwd = 2)
 par(mar = c(1, 4, 1, 2))
 
-# Cortar a árvore de agrupamento para obter os grupos
+# Cut clustering tree to get groups
 sub_grp <- cutree(cluster_hierarquico50, h = grupos)
 
-# Plotar o dendrograma
+# Plot dendrogram
 plot(cluster_hierarquico50, axes = TRUE, main = NULL, xlab = NULL, ylab = "Dissimilarity")
 
-# Adicionar retângulos para indicar os grupos
-rect.hclust(cluster_hierarquico50, k = num_grupos, border = cluster_colors) # Ajuste as cores conforme necessário
+# Add rectangles to indicate groups
+rect.hclust(cluster_hierarquico50, k = 7, border = cluster_colors)
 
 
 ####
 #### TOPIC PROPORTION PER YEAR ####
-####
+###
 
 
 library(dplyr)
@@ -633,20 +583,20 @@ library(ggplot2)
 library(stringr)
 
 # Topic distribution per document
-topic_distribution <- M3 # já é DF e tem a coluna "Year"
+topic_distribution <- M3 # already a DF with "Year" column
 colnames(topic_distribution)[colnames(topic_distribution) == "V20"] <- "Year"
 
-# Garantir que a coluna Year é numérica
+# Ensure Year column is numeric
 topic_distribution$Year <- as.numeric(topic_distribution$Year)
 
-# Definir os intervalos personalizados
-breaks <- c(1958, 1989, 1994, 1999, 2004, 2009, 2014, 2019, 2024) # Limites dos intervalos
+# Define custom intervals
+breaks <- c(1958, 1989, 1994, 1999, 2004, 2009, 2014, 2019, 2024) # Interval limits
 labels <- c(
   "1958-1989", "1990-1994", "1995-1999", "2000-2004", "2005-2009",
   "2010-2014", "2015-2019", "2020-2024"
-) # Nomes dos intervalos
+) # Interval names
 
-# Criar a coluna Year_Group com os intervalos personalizados
+# Create Year_Group column with custom intervals
 topic_distribution$Year_Group <- cut(topic_distribution$Year,
   breaks = breaks,
   labels = labels,
@@ -654,96 +604,96 @@ topic_distribution$Year_Group <- cut(topic_distribution$Year,
   include.lowest = TRUE
 )
 
-# Calcular as médias das proporções de tópicos para cada intervalo personalizado
+# Calculate average topic proportions for each custom interval
 average_topic_proportions <- topic_distribution %>%
   group_by(Year_Group) %>%
   summarise(across(everything(), mean, na.rm = TRUE))
 
-# Renomear as colunas para facilitar a visualização
+# Rename columns for easier visualization
 colnames(average_topic_proportions) <- c("Year", topic_names)
 
-# Transformar o dataframe para formato longo para facilitar o gráfico
+# Transform dataframe to long format for easier plotting
 average_topic_long <- reshape2::melt(average_topic_proportions,
   id.vars = "Year",
   variable.name = "Topic",
   value.name = "Proportion"
 )
 
-# Filtrar dados válidos
-average_topic_long_filtered <- average_topic_long[average_topic_long$Proportion >= 0 & average_topic_long$Proportion <= 1, ]
+# Filter valid data
+average_topic_long_filtered <- average_topic_long[average_topic_long$Proportion
+>= 0 & average_topic_long$Proportion <= 1, ]
 
-# Verificar se ainda há valores ausentes após a filtragem
+# Check for missing values after filtering
 print(sum(is.na(average_topic_long_filtered$Proportion)))
 
 
-# Função para calcular a inclinação da regressão linear
+# Function to calculate linear regression slope
 calculate_slope <- function(data) {
   model <- lm(Proportion ~ as.numeric(Year), data = data)
-  return(coef(model)[2]) # Retorna a inclinação (slope)
+  return(coef(model)[2]) # Returns slope
 }
 
-# Calcular a inclinação para cada tópico
+# Calculate slope for each topic
 slopes <- average_topic_long_filtered %>%
   group_by(Topic) %>%
   summarise(Slope = calculate_slope(cur_data()))
 
-# Adicionar uma coluna com a cor baseada na inclinação
+# Add column with color based on slope
 slopes <- slopes %>%
   mutate(Color = case_when(
-    Slope > 0 ~ "#0000FF", # Tendência negativa
-    Slope < 0 ~ "#FF0000", # Tendência positiva
-    TRUE ~ "black" # Tendência quase nula
+    Slope > 0 ~ "#0000FF", # Positive trend
+    Slope < 0 ~ "#FF0000", # Negative trend
+    TRUE ~ "black" # Neutral trend
   ))
 
-# Juntar os dados de inclinação de volta ao conjunto de dados original
+# Merge slope data back to original dataset
 average_topic_long_filtered <- merge(average_topic_long_filtered, slopes, by = "Topic")
 
-# Ordenar a coluna Topic em ordem alfabética
+# Sort Topic column alphabetically
 unique(average_topic_long_filtered$Topic)
 
-# Reatribuir os níveis da coluna Topic em ordem alfabética
+# Reassign Topic levels alphabetically
 average_topic_long_filtered$Topic <- factor(average_topic_long_filtered$Topic,
   levels = sort(levels(average_topic_long_filtered$Topic))
 )
 
-# Dropar níveis que não estão mais presentes
+# Drop levels that are no longer present
 average_topic_long_filtered$Topic <- droplevels(average_topic_long_filtered$Topic)
 
-# verificar níveis
+# Check levels
 levels(average_topic_long_filtered$Topic)
-
 str(average_topic_long_filtered)
 
 par(lwd = 1)
-# Criar o gráfico com facetas para cada tópico e adicionar a linha de tendência com cores personalizadas
+# Create faceted plot for each topic and add trend line with custom colors
 p <- ggplot(average_topic_long_filtered, aes(x = Year, y = Proportion, group = Topic)) +
-  geom_line(size = 1.5) + # Linha principal
-  geom_point(size = 2) + # Pontos
-  geom_smooth(method = "lm", se = FALSE, aes(color = Color), linetype = "dashed", size = .8) + # Linha de tendência colorida
+  geom_line(size = 1.5) + # Main line
+  geom_point(size = 2) + # Points
+  geom_smooth(method = "lm", se = FALSE, aes(color = Color), linetype = "dashed", size = .8) + # Colored trend line
   theme_minimal() +
   labs(
     title = NULL,
     x = NULL,
     y = "Mean Proportion"
   ) +
-  theme(legend.position = "none") + # Remover a legenda já que cada gráfico tem seu próprio título
+  theme(legend.position = "none") + # Remove legend since each plot has its own title
   scale_x_discrete(breaks = labels) +
-  facet_wrap(~ str_wrap(Topic, width = 24), scales = "free_y", ncol = 5) + # Quebra de linha nos títulos dos facets
-  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1))) + # Expandir um pouco o limite superior
+  facet_wrap(~ str_wrap(Topic, width = 24), scales = "free_y", ncol = 5) + # Line break in facet titles
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1))) + # Expand upper limit slightly
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, size = 12, colour = "black"), # Rotacionar os rótulos do eixo X
-    axis.title.y = element_text(size = 14), # Aumentar o título do eixo Y
-    axis.text.y = element_text(size = 12, colour = "black"), # Aumentar o tamanho dos rótulos do eixo Y
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12, colour = "black"), # Rotate X-axis labels
+    axis.title.y = element_text(size = 14), # Increase Y-axis title
+    axis.text.y = element_text(size = 12, colour = "black"), # Increase Y-axis label size
     strip.text = element_text(size = 14)
   ) # Aumentar o tamanho do título de cada facet
 plot(p)
-ggsave("grafico_facets5.jpg",
+ggsave("data/grafico_facets.jpg",
   plot = p,
   width = 14, height = 10
-) # Ajuste width e height conforme necessário, maior height mais ingrime
+)
 
 
-###
+####
 #### TOPIC GENERALITY-SPECIFICITY ####
 ###
 
@@ -795,147 +745,64 @@ ggplot(generality_result, aes(x = excluded, y = included)) +
 
 ####
 #### GAPS CO-OCCURENCE  ####
-####
-
-####
-# USING NUMBERS
-####
+###
 
 
 M1 <- t(modeltools::posterior(ldaOut19)$terms) # word x topic
 M2 <- modeltools::posterior(ldaOut19)$topics # article x topic
 M3 <- as.data.frame(cbind(M2, dat$Publication.Year))
 
-# Usando a matriz de distribuição dos tópicos M2tops
-topic_distribution <- M2 # Igual à sua matriz de proporções
-num_topics <- ncol(topic_distribution)
-
-# Inicializando a matriz de co-ocorrência
-co_occurrence_matrix <- matrix(0, nrow = num_topics, ncol = num_topics)
-colnames(co_occurrence_matrix) <- 1:num_topics
-row.names(co_occurrence_matrix) <- 1:num_topics
-
-# Calcular as co-ocorrências multiplicando a probabilidade de ocorrência dos pares de tópicos
-for (i in 1:num_topics) {
-  for (j in 1:num_topics) {
-    co_occurrence_values <- numeric(nrow(topic_distribution)) # Armazena co-ocorrências para cada artigo
-
-    for (k in 1:nrow(topic_distribution)) {
-      prob_T1 <- topic_distribution[k, i]
-      prob_T2 <- topic_distribution[k, j]
-
-      # Multiplicar a probabilidade de ocorrência dos dois tópicos
-      co_occurrence_values[k] <- prob_T1 * prob_T2
-    }
-
-    # Calcular a média de co-ocorrência para o par de tópicos
-    co_occurrence_matrix[i, j] <- mean(co_occurrence_values, na.rm = TRUE)
-  }
-}
-
-# Normalizar os valores da matriz para que o maior valor seja igual a 1
-max_co_occurrence <- max(co_occurrence_matrix)
-co_occurrence_matrix <- co_occurrence_matrix / max_co_occurrence
-
-# Criar um heatmap triangular
-library(ggplot2)
-library(reshape2)
-
-# Transformar a matriz em um data.frame no formato longo para o ggplot2
-co_occurrence_df <- melt(co_occurrence_matrix)
-colnames(co_occurrence_df) <- c("Topic1", "Topic2", "CoOccurrence")
-
-# Remover valores redundantes para criar o heatmap triangular
-co_occurrence_df <- co_occurrence_df[co_occurrence_df$Topic1 < co_occurrence_df$Topic2, ]
-
-# Criar o heatmap triangular para identificar lacunas de conhecimento
-ggplot(co_occurrence_df, aes(x = factor(Topic1), y = factor(Topic2), fill = CoOccurrence)) +
-  geom_tile() +
-  geom_text(aes(label = round(CoOccurrence, 2)), color = "black", size = 4) + # Adicionar os valores de co-ocorrência
-  scale_fill_gradient(low = "white", high = "blue") +
-  labs(
-    title = "Heatmap de Co-Ocorrência dos Tópicos (Lacunas de Conhecimento)",
-    x = NULL,
-    y = NULL,
-    fill = "Co-ocorrência"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-
-####
-# USING NAMES
-####
-
-M1 <- t(modeltools::posterior(ldaOut19)$terms) # word x topic
-M2 <- modeltools::posterior(ldaOut19)$topics # article x topic
-M3 <- as.data.frame(cbind(M2, dat$Publication.Year))
-
-# Distribui??o dos t?picos por documento
-topic_distribution <- posterior(ldaOut19)$topics # igual ao M2
+# Topic distribution per document
+topic_distribution <- posterior(ldaOut19)$topics # equal to M2
 # colnames(topic_distribution) <- topic_names
 
-# Inicializando a matriz de co-ocorr?ncia
+# Initialize co-occurrence matrix
 num_topics <- ncol(topic_distribution)
 co_occurrence_matrix <- matrix(0, nrow = num_topics, ncol = num_topics)
 colnames(co_occurrence_matrix) <- topic_names
 row.names(co_occurrence_matrix) <- topic_names
 
-# Calcular as co-ocorr?ncias multiplicando a probabilidade de ocorr?ncia dos pares de t?picos
+# Calculate co-occurrences by multiplying probability of topic pairs
 for (i in 1:num_topics) {
   for (j in 1:num_topics) {
-    co_occurrence_values <- numeric(nrow(topic_distribution)) # Armazena co-ocorr?ncias para cada artigo
+    co_occurrence_values <- numeric(nrow(topic_distribution)) # Stores co-occurrences for each article
 
     for (k in 1:nrow(topic_distribution)) {
       prob_T1 <- topic_distribution[k, i]
       prob_T2 <- topic_distribution[k, j]
 
-      # Multiplicar a probabilidade de ocorr?ncia dos dois t?picos
+      # Multiply probability of occurrence of both topics
       co_occurrence_values[k] <- prob_T1 * prob_T2
     }
 
-    # Calcular a m?dia de co-ocorr?ncia para o par de t?picos
+    # Calculate mean co-occurrence for topic pair
     co_occurrence_matrix[i, j] <- mean(co_occurrence_values, na.rm = TRUE)
   }
 }
 
-# Normalizar os valores da matriz para que o maior valor seja igual a 1
+# Normalize matrix values so max value is 1
 max_co_occurrence <- max(co_occurrence_matrix)
 co_occurrence_matrix <- co_occurrence_matrix / max_co_occurrence
 
-# Criar um heatmap triangular
+# Create triangular heatmap
 library(ggplot2)
 library(reshape2)
 
-# Transformar a matriz em um data.frame no formato longo para o ggplot2
+# Transform matrix to long format data.frame for ggplot2
 co_occurrence_df <- melt(co_occurrence_matrix)
 colnames(co_occurrence_df) <- c("Topic1", "Topic2", "CoOccurrence")
 
-# Converta as colunas Topic1 e Topic2 para caracteres
+# Convert Topic1 and Topic2 columns to character
 co_occurrence_df$Topic1 <- as.character(co_occurrence_df$Topic1)
 co_occurrence_df$Topic2 <- as.character(co_occurrence_df$Topic2)
 
-# Remover valores redundantes para criar o heatmap triangular
+# Remove redundant values to create triangular heatmap
 co_occurrence_df <- co_occurrence_df[co_occurrence_df$Topic1 < co_occurrence_df$Topic2, ]
 
-# Criar o heatmap triangular para identificar lacunas de conhecimento
-# ggplot(co_occurrence_df, aes(x = factor(Topic1), y = factor(Topic2), fill = CoOccurrence)) +
-geom_tile() +
-  scale_fill_gradient(low = "white", high = "blue") +
-  labs(
-    title = NULL,
-    x = NULL,
-    y = NULL,
-    fill = "Co-occurence"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-
-# Criar o heatmap triangular para identificar lacunas de conhecimento
+# Create triangular heatmap to identify knowledge gaps
 ggplot(co_occurrence_df, aes(x = factor(Topic1), y = factor(Topic2), fill = CoOccurrence)) +
   geom_tile() +
-  geom_text(aes(label = round(CoOccurrence, 2)), color = "black", size = 4) + # Adicionar os valores de co-ocorr?ncia
+  geom_text(aes(label = round(CoOccurrence, 2)), color = "black", size = 4) + # Add co-occurrence values
   scale_fill_gradient(low = "white", high = "red") +
   labs(
     title = NULL,
@@ -947,36 +814,4 @@ ggplot(co_occurrence_df, aes(x = factor(Topic1), y = factor(Topic2), fill = CoOc
   theme(
     axis.text.y = element_text(hjust = 1, size = 12, colour = "black"),
     axis.text.x = element_text(angle = 45, hjust = 1, size = 12, colour = "black")
-  )
-
-
-# GIRANDO 90 graus
-ggplot(co_occurrence_df, aes(y = factor(Topic1), x = factor(Topic2), fill = CoOccurrence)) +
-  geom_tile() +
-  geom_text(aes(label = round(CoOccurrence, 2)), color = "black", size = 4) + # Adicionar os valores de co-ocorrência
-  scale_fill_gradient(low = "white", high = "red") +
-  labs(
-    title = NULL,
-    x = NULL,
-    y = NULL,
-    fill = "Co-occurence"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.y = element_text(hjust = 1, size = 12, colour = "black"),
-    axis.text.x = element_text(angle = 45, hjust = 1, size = 12, colour = "black")
-  )
-
-
-# Criar o heatmap triangular para identificar lacunas de conhecimento com SIMILARIDADE - não tá na ordem
-# article.dist <-dist(as.data.frame(t(M2)), method="euclidean", diag=FALSE, lower=FALSE)
-# attr(article.dist, "Labels") <- topic_names
-
-# scale.zero.one<-function(x){x<-x-min(x, na.rm=TRUE); x<-x*100; x<-x/max(x, na.rm=TRUE); return(x)}
-# gap.width<-scale.zero.one(article.dist)
-# ggcorrplot(as.matrix(gap.width), hc.order = TRUE, type = "upper", lab = TRUE, lab_size = 3.5, method = "square", colors = c("blue", "white", "red"))+
-theme(axis.text.x = element_text(size = 10, color = "black"), axis.text.y = element_text(size = 11, color = "black")) +
-  scale_fill_gradientn(
-    name = "Dissimilarity", colors = c("white", "blue"), values = c(0, 0.25, 0.5, 0.75, 1),
-    guide = guide_colorbar(breaks = c(0, 0.5, 1))
   )
