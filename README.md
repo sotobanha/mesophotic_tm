@@ -1,6 +1,6 @@
 # Mesophotic ecosystems: a topic modeling analysis of research trends and gaps
 
-Thomás Banha<sup>1,2*</sup>, Hudson T. Pinheiro<sup>2</sup>, Ronaldo B. Francini-Filho<sup>2,a</sup>, Osmar J. Luiz<sup>3,4a</sup>
+Thomás Banha<sup>1,2*</sup>, Hudson T. Pinheiro<sup>2</sup>, Ronaldo B. Francini-Filho<sup>2a</sup>, Osmar J. Luiz<sup>3,4,a</sup>
 
 <sup>1</sup> Programa de Pós-Graduação em Ecologia, Instituto de Biociências, Universidade de São Paulo, São Paulo, Brazil
 <sup>2</sup> Centro de Biologia Marinha (CEBIMar), Universidade de São Paulo, São Sebastião, Brazil 
