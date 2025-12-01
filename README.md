@@ -15,4 +15,4 @@ Thomás Banha<sup>1,2*</sup>, Hudson T. Pinheiro<sup>2</sup>, Ronaldo B. Francin
 <sup>*</sup> Corresponding author: sotobanha@usp.br
 
 
-Repository containing the data and code used in the article “Mesophotic ecosystems: a topic modeling analysis of research trends and gaps”, by Banha et al., accepted in _Coral Reefs_ on 2025/11/17.
+Repository containing the data and code used in the article “Mesophotic ecosystems: a topic modeling analysis of research trends and gaps”, by Banha et al., available at https://doi.org/10.1007/s00338-025-02787-7
